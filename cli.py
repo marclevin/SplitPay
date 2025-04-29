@@ -335,7 +335,7 @@ def show_balances():
         total_paid = db.query(
             func.coalesce(func.sum(Expense.amount), 0)
         ).filter(
-            Expense.paid_by_id == member.id,
+            Expense.paid_by_id == int(member.id),
             Expense.group_id == group_id
         ).scalar()
 
@@ -343,7 +343,7 @@ def show_balances():
         total_owed = db.query(
             func.coalesce(func.sum(ExpenseSplit.share_amount), 0)
         ).join(Expense).filter(
-            ExpenseSplit.member_id == member.id,
+            ExpenseSplit.member_id == int(member.id),
             Expense.group_id == group_id
         ).scalar()
 
@@ -352,7 +352,7 @@ def show_balances():
         repayments_made = db.query(
             func.coalesce(func.sum(Payment.amount), 0)
         ).filter(
-            Payment.from_id == member.id,
+            Payment.from_id == int(member.id),
             Payment.group_id == group_id
         ).scalar()
 
@@ -360,7 +360,7 @@ def show_balances():
         repayments_received = db.query(
             func.coalesce(func.sum(Payment.amount), 0)
         ).filter(
-            Payment.to_id == member.id,
+            Payment.to_id == int(member.id),
             Payment.group_id == group_id
         ).scalar()
 
@@ -383,7 +383,6 @@ def show_balances():
         typer.echo("Everyone is settled up!")
     for debtor, creditor, amount in transactions:
         typer.echo(f"➡️ {debtor} pays {creditor} R{amount}")
-
 
 
 @app.command()
