@@ -8,7 +8,7 @@ from sqlalchemy import func
 from typing_extensions import Annotated
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
-from app.models import Member, Group, Expense, ExpenseSplit
+from app.models import Member, Group, Expense, ExpenseSplit, Payment
 
 # Session Logic
 import os
@@ -348,7 +348,24 @@ def show_balances():
         ).scalar()
 
         # Net balance
-        net_balance = round(total_paid - total_owed, 2)
+        # Sum of repayments made
+        repayments_made = db.query(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).filter(
+            Payment.from_id == member.id,
+            Payment.group_id == group_id
+        ).scalar()
+
+        # Sum of repayments received
+        repayments_received = db.query(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).filter(
+            Payment.to_id == member.id,
+            Payment.group_id == group_id
+        ).scalar()
+
+        # Net balance
+        net_balance = round((total_paid + repayments_made) - (total_owed + repayments_received), 2)
         balances[member.name] = net_balance
 
     typer.echo("💸 Group Balances:")
@@ -359,6 +376,80 @@ def show_balances():
             typer.echo(f"❌ {name} owes R{abs(balance)}")
         else:
             typer.echo(f"⚖️ {name} is settled up.")
+
+    typer.echo("\n🔁 Simplified Transactions:")
+    transactions = simplify_debts(balances)
+    if not transactions:
+        typer.echo("Everyone is settled up!")
+    for debtor, creditor, amount in transactions:
+        typer.echo(f"➡️ {debtor} pays {creditor} R{amount}")
+
+
+
+@app.command()
+def record_payment(from_member: str, to_member: str, amount: float):
+    """
+    Record a repayment from one member to another.
+    """
+    db: Session = next(get_db())
+    group_id = get_active_group_id()
+    if not group_id:
+        typer.echo("⚠️ No group selected.")
+        raise typer.Exit()
+
+    payer = db.query(Member).filter(Member.name == from_member, Member.group_id == group_id).first()
+    recipient = db.query(Member).filter(Member.name == to_member, Member.group_id == group_id).first()
+
+    if not payer or not recipient:
+        typer.echo("❌ Members not found in this group.")
+        raise typer.Exit()
+
+    payment = Payment(
+        from_id=payer.id,
+        to_id=recipient.id,
+        amount=amount,
+        group_id=group_id
+    )
+
+    db.add(payment)
+    db.commit()
+    typer.echo(f"✅ Payment recorded: {from_member} paid {to_member} R{amount}.")
+
+
+def simplify_debts(balances: dict[str, float]):
+    creditors = []
+    debtors = []
+
+    for name, balance in balances.items():
+        if balance > 0:
+            creditors.append((name, balance))
+        elif balance < 0:
+            debtors.append((name, -balance))  # make positive
+
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
+
+    transactions = []
+
+    i, j = 0, 0
+
+    while i < len(debtors) and j < len(creditors):
+        debtor, debt_amt = debtors[i]
+        creditor, credit_amt = creditors[j]
+
+        settled_amt = min(debt_amt, credit_amt)
+
+        transactions.append((debtor, creditor, settled_amt))
+
+        debtors[i] = (debtor, debt_amt - settled_amt)
+        creditors[j] = (creditor, credit_amt - settled_amt)
+
+        if debtors[i][1] == 0:
+            i += 1
+        if creditors[j][1] == 0:
+            j += 1
+
+    return transactions
 
 
 if __name__ == "__main__":
