@@ -4,7 +4,7 @@ from typing_extensions import Annotated
 from app.commands.group import get_db_and_group
 from app.models import Member, Group
 
-member_app = typer.Typer()
+member_app = typer.Typer(no_args_is_help=True)
 
 
 @member_app.command()

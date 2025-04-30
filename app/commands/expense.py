@@ -4,7 +4,7 @@ from typing_extensions import Annotated
 from app.models import Member, Expense, ExpenseSplit
 from app.commands.group import get_db_and_group
 
-expense_app = typer.Typer()
+expense_app = typer.Typer(no_args_is_help=True)
 
 
 @expense_app.command()
