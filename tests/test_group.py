@@ -51,3 +51,17 @@ class TestGroupCommands(BaseCLITest):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("❌ Group 'nonexistent_group' not found.", result.stdout)
 
+    # Command: group show
+    def test_show(self):
+        self.mock_db.query.return_value.all.return_value = [
+            MagicMock(name="Group1", id=1),
+            MagicMock(name="Group2", id=2)
+        ]
+        result = runner.invoke(app, ["group", "show"])
+        self.assertEqual(result.exit_code, 0)
+
+    def test_show_no_groups(self):
+        self.mock_db.query.return_value.all.return_value = []
+        result = runner.invoke(app, ["group", "show"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("❌ No groups found.", result.stdout)
