@@ -1,8 +1,7 @@
 import typer
-from datetime import datetime
 from sqlalchemy import func
-from sqlalchemy.orm import Session
-from app.commands.group import get_active_group_id, get_db_and_group
+
+from app.commands.group import get_db_and_group
 from app.models import Member, Expense, ExpenseSplit, Payment
 
 split_app = typer.Typer()
@@ -89,14 +88,14 @@ def payment(from_member: str, to_member: str, amount: float):
             typer.echo("❌ Members not found in this group.")
             raise typer.Exit()
 
-        payment = Payment(
+        _payment = Payment(
             from_id=payer.id,
             to_id=recipient.id,
             amount=amount,
             group_id=group.id
         )
 
-        db.add(payment)
+        db.add(_payment)
         typer.echo(f"✅ Payment recorded: {from_member} paid {to_member} R{amount}.")
 
 
