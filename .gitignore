@@ -1,1 +1,3 @@
 /.env
+/.coverage
+/.eco_session
