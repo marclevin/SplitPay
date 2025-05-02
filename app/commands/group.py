@@ -3,7 +3,7 @@ import typer
 from app.models import Group
 from app.utils.helpers import get_db, set_active_group_id, clear_active_group, get_db_and_group, get_active_group_id
 
-group_app = typer.Typer()
+group_app = typer.Typer(no_args_is_help=True,short_help="Group management commands.")
 
 
 # Group Management Commands
@@ -68,9 +68,6 @@ def current():
     Show the currently selected group.
     """
     with get_db_and_group() as (db, group):
-        if not group:
-            typer.echo("⚠️ No active group session.")
-            raise typer.Exit()
         typer.echo(f"📁 Current group: '{group.name}' (ID: {group.id})")
 
 

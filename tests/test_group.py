@@ -12,6 +12,30 @@ class TestGroupCommands(BaseCLITest):
     def setUp(self):
         super().setUp()
 
+    # Command: group select
+    @patch('app.commands.group.set_active_group_id')
+    def test_select(self, mock_set_active_group_id):
+        mock_set_active_group_id.return_value = None
+        # Test if we can select a group
+        self.mock_db.query.return_value.all.return_value = [
+            MagicMock(name="Group1", id=1),
+            MagicMock(name="Group2", id=2)
+        ]
+        result = runner.invoke(app, ["group", "select"], input="1\n")
+        self.assertEqual(result.exit_code, 0)
+
+    @patch('app.commands.group.set_active_group_id')
+    def test_select_invalid(self, mock_set_active_group_id):
+        mock_set_active_group_id.return_value = None
+        # Test if we cannot select a group with an invalid number
+        self.mock_db.query.return_value.all.return_value = [
+            MagicMock(name="Group1", id=1),
+            MagicMock(name="Group2", id=2)
+        ]
+        result = runner.invoke(app, ["group", "select"], input="3\n")
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("❌ Invalid selection.", result.stdout)
+
     # Command: group create
     @patch('app.commands.group.set_active_group_id')
     def test_create(self, mock_set_active_group_id):
@@ -65,3 +89,21 @@ class TestGroupCommands(BaseCLITest):
         result = runner.invoke(app, ["group", "show"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("❌ No groups found.", result.stdout)
+
+    # Command: group current
+
+    def test_current(self):
+        # Test if we can show the current group, our base sets this so we can just call it
+        result = runner.invoke(app, ["group", "current"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("📁 Current group: 'TestGroup'", result.stdout)
+
+
+    @patch('app.commands.group.clear_active_group')
+    def test_clear_session(self, mock_clear_active_group):
+        # Test if we can clear the session
+        mock_clear_active_group = MagicMock()
+        mock_clear_active_group.return_value = None
+        result = runner.invoke(app, ["group", "clear-session"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("🧹 Session cleared.", result.stdout)
