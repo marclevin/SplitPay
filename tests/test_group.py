@@ -93,11 +93,10 @@ class TestGroupCommands(BaseCLITest):
     # Command: group current
 
     def test_current(self):
-        # Test if we can show the current group, our base sets this so we can just call it
+        # Test if we can show the current group, our base sets this, so we can just call it
         result = runner.invoke(app, ["group", "current"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("📁 Current group: 'TestGroup'", result.stdout)
-
 
     @patch('app.commands.group.clear_active_group')
     def test_clear_session(self, mock_clear_active_group):
