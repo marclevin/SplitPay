@@ -13,6 +13,7 @@ SESSION_FILE = ".eco_session"
 def set_active_group_id(group_id: int):
     with open(SESSION_FILE, "w") as f:
         f.write(str(group_id))
+        f.close()
 
 
 def get_active_group_id() -> int | None:
@@ -84,6 +85,7 @@ def resolve_or_prompt_group(db: Session) -> int:
         if 0 <= index < len(groups):
             selected = groups[index]
             set_active_group_id(selected.id)
+            typer.echo(f"✅ Selected group '{selected.name}' (id: {selected.id}) as active.")
             return selected.id
     except ValueError:
         pass
