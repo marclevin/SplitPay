@@ -2,6 +2,7 @@
 /.coverage
 /.eco_session
 /.idea
+/.vscode
 
 __pycache__
 

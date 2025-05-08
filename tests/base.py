@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 from app.models import Group
+from contextlib import contextmanager
 
 
 class BaseCLITest(unittest.TestCase):
@@ -45,6 +46,18 @@ class BaseCLITest(unittest.TestCase):
         patcher = patch(target, **kwargs)
         mocked = patcher.start()
         self.patches[target] = mocked
+
+    @contextmanager
+    def mock_db_and_group(self, module_path="app.commands"):
+        """Helper context manager to mock get_db_and_group for any command module.
+        
+        Args:
+            module_path (str): The module path where get_db_and_group is imported from.
+                              Defaults to "app.commands" but can be overridden for different modules.
+        """
+        with patch(f'{module_path}.get_db_and_group') as mock_get_db_and_group:
+            mock_get_db_and_group.return_value.__enter__.return_value = (self.mock_db, self.mock_group)
+            yield mock_get_db_and_group
 
     def tearDown(self):
         for patcher in self.patches.values():
