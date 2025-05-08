@@ -81,7 +81,7 @@ def add(
 #     if not expense:
 #         typer.echo(f"❌ Expense ID {expense_id} not found.")
 #         raise typer.Exit()
-#
+
 #     # Prompt for new values
 #     typer.echo(f"Editing expense ID {expense_id}:")
 #     typer.echo(f"Current description: {expense.description}")
@@ -112,7 +112,7 @@ def add(
 #             raise typer.Exit()
 #         splits.append({"member_id": member_obj.id, "share_amount": share_amount})
 #     db.query(ExpenseSplit).filter_by(expense_id=expense.id).delete()
-#
+
 #     for split in splits:
 #         new_split = ExpenseSplit(
 #             expense_id=expense.id,
@@ -120,7 +120,7 @@ def add(
 #             share_amount=split["share_amount"]
 #         )
 #         db.add(new_split)
-#
+
 #     db.commit()
 #     typer.echo(f"✅ Expense ID {expense_id} updated.")
 
@@ -133,7 +133,7 @@ def show():
         expenses = db.query(Expense).filter_by(group_id=group.id).all()
         if not expenses:
             typer.echo("No expenses found in the current group.")
-            return
+            raise typer.Exit()
         typer.echo(f"📊 Expenses in group '{group.name}':")
         for expense in expenses:
             payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
