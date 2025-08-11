@@ -10,7 +10,7 @@ split_app = typer.Typer(no_args_is_help=True)
 @split_app.command()
 def show():
     """
-    Calculate and display net balances for each member in the active group.
+    Calculate and display net balances and simplified settlements for the active group.
     """
     with get_db_and_group() as (db, group):
         members = db.query(Member).filter_by(group_id=group.id).all()
@@ -18,62 +18,125 @@ def show():
             typer.echo("⚠️ No members found in group.")
             return
 
-        balances = {}
+        # Collect per-member tallies
+        rows = []  # [(name, paid, owed, repaid, received, net)]
 
-        for member in members:
-            # Total amount the member paid
-            total_paid = db.query(
-                func.coalesce(func.sum(Expense.amount), 0)
-            ).filter(
-                Expense.paid_by_id == int(member.id),
+        for m in members:
+            total_paid = db.query(func.coalesce(func.sum(Expense.amount), 0.0)).filter(
+                Expense.paid_by_id == int(m.id),
                 Expense.group_id == group.id
-            ).scalar()
+            ).scalar() or 0.0
 
-            # Total amount the member owes (sum of their splits)
-            total_owed = db.query(
-                func.coalesce(func.sum(ExpenseSplit.share_amount), 0)
-            ).join(Expense).filter(
-                ExpenseSplit.member_id == int(member.id),
+            total_owed = db.query(func.coalesce(func.sum(ExpenseSplit.share_amount), 0.0)).join(Expense).filter(
+                ExpenseSplit.member_id == int(m.id),
                 Expense.group_id == group.id
-            ).scalar()
+            ).scalar() or 0.0
 
-            # Net balance
-            # Sum of repayments made
-            repayments_made = db.query(
-                func.coalesce(func.sum(Payment.amount), 0)
-            ).filter(
-                Payment.from_id == int(member.id),
+            repaid = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
+                Payment.from_id == int(m.id),
                 Payment.group_id == group.id
-            ).scalar()
+            ).scalar() or 0.0
 
-            # Sum of repayments received
-            repayments_received = db.query(
-                func.coalesce(func.sum(Payment.amount), 0)
-            ).filter(
-                Payment.to_id == int(member.id),
+            received = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
+                Payment.to_id == int(m.id),
                 Payment.group_id == group.id
-            ).scalar()
+            ).scalar() or 0.0
 
-            # Net balance
-            net_balance = round((total_paid + repayments_made) - (total_owed + repayments_received), 2)
-            balances[member.name] = net_balance
+            # Net = what you're effectively up/down after expenses and repayments
+            # Positive => others owe you; Negative => you owe others
+            net = (total_paid + repaid) - (total_owed + received)
 
-        typer.echo("💸 Group Balances:")
-        for name, balance in balances.items():
-            if balance > 0:
-                typer.echo(f"✅ {name} is owed R{balance}")
-            elif balance < 0:
-                typer.echo(f"❌ {name} owes R{abs(balance)}")
-            else:
-                typer.echo(f"⚖️ {name} is settled up.")
+            rows.append((m.name, total_paid, total_owed, repaid, received, net))
 
-        typer.echo("\n🔁 Simplified Transactions:")
-        transactions = simplify_debts(balances)
-        if not transactions:
-            typer.echo("Everyone is settled up!")
-        for debtor, creditor, amount in transactions:
-            typer.echo(f"➡️  {debtor} pays {creditor} R{amount}")
+        # Stable ordering for display
+        rows.sort(key=lambda r: r[0].lower())
 
+        # Pretty print table
+        def money(x: float) -> str:
+            return f"R{round(x + 1e-9, 2):,.2f}"
+
+        # Compute column widths
+        headers = ["Member", "Paid", "Owed", "Repaid", "Received", "Net"]
+        str_rows = [
+            [name, money(paid), money(owed), money(repaid), money(received), money(net)]
+            for (name, paid, owed, repaid, received, net) in rows
+        ]
+        col_widths = [max(len(h), *(len(r[i]) for r in str_rows)) for i, h in enumerate(headers)]
+
+        def fmt_line(cells):
+            return "  ".join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells))
+
+        typer.echo(f"💸 Group Balances for '{group.name}':")
+        typer.echo(fmt_line(headers))
+        typer.echo(fmt_line(["-" * w for w in col_widths]))
+        for r in str_rows:
+            typer.echo(fmt_line(r))
+
+        # Build balances dict for settlement (name -> net rounded to cents)
+        balances = {name: round(net + 1e-9, 2) for (name, _, _, _, _, net) in rows}
+
+        # Summary hints
+        total_positive = round(sum(v for v in balances.values() if v > 0), 2)
+        total_negative = round(sum(-v for v in balances.values() if v < 0), 2)
+        typer.echo(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(total_negative)}")
+
+        # Compute minimal set of payments to settle up
+        settlements = _min_cash_flow_settlements(balances)
+
+        typer.echo("\n🔁 Suggested Settlements:")
+        if not settlements:
+            typer.echo("Everyone is settled up! 🎉")
+        else:
+            for debtor, creditor, amount in settlements:
+                typer.echo(f"➡️  {debtor} pays {creditor} {money(amount)}")
+
+
+def _min_cash_flow_settlements(balances: dict[str, float]) -> list[tuple[str, str, float]]:
+    """
+    Minimal-cash-flow settlement:
+    - Repeatedly match the most negative (largest debtor) with the most positive (largest creditor).
+    - Transfer the min(abs(debt), credit); update balances; continue until all ~0.
+    This yields few, high-value transfers and is stable with rounding.
+    """
+    # Copy and clean tiny residuals
+    eps = 0.01  # cents
+    b = {k: (0.0 if abs(v) < eps else round(v, 2)) for k, v in balances.items()}
+    creditors = [(k, v) for k, v in b.items() if v > 0]
+    debtors = [(k, -v) for k, v in b.items() if v < 0]  # store as positive amounts
+
+    # Nothing to do?
+    if not creditors or not debtors:
+        return []
+
+    # Work on mutables
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
+
+    i, j = 0, 0
+    res: list[tuple[str, str, float]] = []
+
+    while i < len(debtors) and j < len(creditors):
+        d_name, d_amt = debtors[i]
+        c_name, c_amt = creditors[j]
+
+        pay = round(min(d_amt, c_amt), 2)
+        if pay >= eps:
+            res.append((d_name, c_name, pay))
+
+        # Update remaining
+        d_rem = round(d_amt - pay, 2)
+        c_rem = round(c_amt - pay, 2)
+
+        debtors[i] = (d_name, d_rem)
+        creditors[j] = (c_name, c_rem)
+
+        # Advance pointers when side is cleared (within epsilon)
+        if d_rem <= eps:
+            i += 1
+        if c_rem <= eps:
+            j += 1
+
+    return res
 
 @split_app.command()
 def payment(from_member: str, to_member: str, amount: float):
@@ -97,39 +160,3 @@ def payment(from_member: str, to_member: str, amount: float):
 
         db.add(_payment)
         typer.echo(f"✅ Payment recorded: {from_member} paid {to_member} R{amount}.")
-
-
-def simplify_debts(balances: dict[str, float]):
-    creditors = []
-    debtors = []
-
-    for name, balance in balances.items():
-        if balance > 0:
-            creditors.append((name, balance))
-        elif balance < 0:
-            debtors.append((name, -balance))  # make positive
-
-    creditors.sort(key=lambda x: x[1], reverse=True)
-    debtors.sort(key=lambda x: x[1], reverse=True)
-
-    transactions = []
-
-    i, j = 0, 0
-
-    while i < len(debtors) and j < len(creditors):
-        debtor, debt_amt = debtors[i]
-        creditor, credit_amt = creditors[j]
-
-        settled_amt = min(debt_amt, credit_amt)
-
-        transactions.append((debtor, creditor, settled_amt))
-
-        debtors[i] = (debtor, debt_amt - settled_amt)
-        creditors[j] = (creditor, credit_amt - settled_amt)
-
-        if debtors[i][1] == 0:
-            i += 1
-        if creditors[j][1] == 0:
-            j += 1
-
-    return transactions
