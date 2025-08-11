@@ -72,7 +72,7 @@ def show():
         if not transactions:
             typer.echo("Everyone is settled up!")
         for debtor, creditor, amount in transactions:
-            typer.echo(f"➡️ {debtor} pays {creditor} R{amount}")
+            typer.echo(f"➡️  {debtor} pays {creditor} R{amount}")
 
 
 @split_app.command()
