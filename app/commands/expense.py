@@ -139,6 +139,7 @@ def add(
 #     db.commit()
 #     typer.echo(f"✅ Expense ID {expense_id} updated.")
 
+
 @expense_app.command()
 def show():
     """
@@ -149,26 +150,39 @@ def show():
         if not expenses:
             typer.echo("No expenses found in the current group.")
             raise typer.Exit()
+
         typer.echo(f"📊 Expenses in group '{group.name}':")
-        
-        # Create a mapping of member names to colors
-        member_colors = {}
+
+        member_colors: dict[str, str] = {}
+
         for expense in expenses:
-            splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
-            for split in splits:
-                if split.member.name not in member_colors:
-                    member_colors[split.member.name] = random.choice(MEMBER_COLORS)
-        
-        for expense in expenses:
+            # 1) payer (2nd query in the test's side_effect)
             payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
+
+            # 2) splits (3rd query in the test's side_effect)
             splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
-            
-            # Create colored split details
+
+            # Assign colors for split members on the fly
+            for split in splits:
+                name = split.member.name
+                if name not in member_colors:
+                    member_colors[name] = random.choice(MEMBER_COLORS)
+
+            # Ensure payer has a color even if not in splits
+            if payer and payer.name not in member_colors:
+                member_colors[payer.name] = random.choice(MEMBER_COLORS)
+
+            # Build display
             split_details = []
             for split in splits:
-                colored_name = typer.style(split.member.name, fg=member_colors[split.member.name])
+                colored_name = typer.style(split.member.name, fg=member_colors.get(split.member.name))
                 split_details.append(f"{colored_name}: {split.share_amount}")
-            
+
             split_details_str = ", ".join(split_details)
+            payer_name = payer.name if payer else "Unknown"
+            colored_payer = typer.style(payer_name, fg=member_colors.get(payer_name))
+
             typer.echo(
-                f"💰 {expense.description} - Amount: {expense.amount}, Paid by: {typer.style(payer.name, fg=member_colors[payer.name])}, Splits: {split_details_str}")
+                f"💰 {expense.description} - Amount: {expense.amount}, "
+                f"Paid by: {colored_payer}, Splits: {split_details_str}"
+            )

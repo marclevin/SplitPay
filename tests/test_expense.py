@@ -1,10 +1,11 @@
-import unittest
-from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
-from tests.base import BaseCLITest
-from cli import app
-from app.models import Member, Expense, ExpenseSplit
 from datetime import datetime
+from unittest.mock import MagicMock
+
+from typer.testing import CliRunner
+
+from app.models import Member, Expense, ExpenseSplit
+from cli import app
+from tests.base import BaseCLITest
 
 runner = CliRunner()
 
@@ -122,7 +123,6 @@ class TestExpenseCommands(BaseCLITest):
         # Create separate mock queries for each database call
         mock_expense_query = MagicMock()
         mock_expense_query.filter_by.return_value.all.return_value = [self.mock_expense]
-        
         mock_member_query = MagicMock()
         mock_member_query.filter_by.return_value.first.return_value = self.mock_member1
         
