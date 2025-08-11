@@ -3,8 +3,23 @@ from datetime import datetime
 from typing_extensions import Annotated
 from app.models import Member, Expense, ExpenseSplit
 from app.commands.group import get_db_and_group
+import random
 
 expense_app = typer.Typer(no_args_is_help=True)
+
+# List of colors for member names
+MEMBER_COLORS = [
+    "bright_blue",
+    "bright_green",
+    "bright_magenta",
+    "bright_yellow",
+    "bright_cyan",
+    "bright_red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta"
+]
 
 
 @expense_app.command()
@@ -135,9 +150,25 @@ def show():
             typer.echo("No expenses found in the current group.")
             raise typer.Exit()
         typer.echo(f"📊 Expenses in group '{group.name}':")
+        
+        # Create a mapping of member names to colors
+        member_colors = {}
+        for expense in expenses:
+            splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
+            for split in splits:
+                if split.member.name not in member_colors:
+                    member_colors[split.member.name] = random.choice(MEMBER_COLORS)
+        
         for expense in expenses:
             payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
             splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
-            split_details = ", ".join([f"{s.member.name}: {s.share_amount}" for s in splits])
+            
+            # Create colored split details
+            split_details = []
+            for split in splits:
+                colored_name = typer.style(split.member.name, fg=member_colors[split.member.name])
+                split_details.append(f"{colored_name}: {split.share_amount}")
+            
+            split_details_str = ", ".join(split_details)
             typer.echo(
-                f"💰 {expense.description} - Amount: {expense.amount}, Paid by: {payer.name}, Splits: {split_details}")
+                f"💰 {expense.description} - Amount: {expense.amount}, Paid by: {typer.style(payer.name, fg=member_colors[payer.name])}, Splits: {split_details_str}")
