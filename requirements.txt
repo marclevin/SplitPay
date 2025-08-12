@@ -1,5 +1,8 @@
 sqlalchemy~=2.0.39
 python-dotenv~=1.1.0
-typer
+typer~=0.16.0
 alembic~=1.15.2
 psycopg2
+
+rich~=14.1.0
+typing_extensions~=4.12.2
