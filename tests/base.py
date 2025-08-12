@@ -1,10 +1,12 @@
 # tests/base.py
 
 import unittest
-from unittest.mock import patch, MagicMock
-from typer.testing import CliRunner
-from app.models import Group
 from contextlib import contextmanager
+from unittest.mock import patch, MagicMock
+
+from typer.testing import CliRunner
+
+from app.models import Group
 
 
 class BaseCLITest(unittest.TestCase):
@@ -16,7 +18,7 @@ class BaseCLITest(unittest.TestCase):
 
         # Patch database session
         self._patch("app.utils.helpers.SessionLocal", new_callable=MagicMock)
-        self.mock_db = self.patches["app.utils.helpers.SessionLocal"].return_value
+        self.mock_db = self.patches["app.utils.helpers.SessionLocal"].start().return_value
 
         # Patch resolve_or_prompt_group
         self._patch("app.utils.helpers.resolve_or_prompt_group", return_value=1)
@@ -45,7 +47,8 @@ class BaseCLITest(unittest.TestCase):
     def _patch(self, target, **kwargs):
         patcher = patch(target, **kwargs)
         mocked = patcher.start()
-        self.patches[target] = mocked
+        self.patches[target] = patcher  # Store the patcher object instead of the mocked instance
+        return mocked  # Return the mocked instance for immediate use if needed
 
     @contextmanager
     def mock_db_and_group(self, module_path="app.commands"):
@@ -61,5 +64,5 @@ class BaseCLITest(unittest.TestCase):
 
     def tearDown(self):
         for patcher in self.patches.values():
-            patch.stopall()
+            patcher.stop()  # Stop each patcher individually
         self.patches.clear()

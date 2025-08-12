@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker
 # Get username, password and dbname from environment variables using dotenv
 import os
 from dotenv import load_dotenv
-from contextlib import contextmanager
 
 load_dotenv()
 # Load environment variables

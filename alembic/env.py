@@ -1,29 +1,12 @@
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-from alembic import context
-
+# import the database URL from db module
+from app.db import DATABASE_URL
 from app.models import Base
-
-
-import os
-from dotenv import load_dotenv
-load_dotenv()
-# Load environment variables
-username = os.getenv('DB_USERNAME')
-password = os.getenv('DB_PASSWORD')
-db_name = os.getenv('DB_NAME')
-db_host = os.getenv('DB_HOST', 'localhost')
-
-if username is None or password is None or db_name is None:
-    raise ValueError("Database credentials are not set in the environment variables.")
-
-
-DATABASE_URL = f"postgresql://{username}:{password}@{db_host}:5432/{db_name}"
-
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -38,9 +21,8 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
