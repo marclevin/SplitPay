@@ -12,7 +12,9 @@ from app.utils.helpers import (
     get_db,
     get_db_and_group,
     resolve_or_prompt_group,
+    min_cash_flow_settlements
 )
+from collections import Counter
 from tests.base import BaseCLITest
 
 
@@ -130,3 +132,66 @@ class TestHelpers(BaseCLITest):
                 patch("typer.prompt", return_value="x"):
             with self.assertRaises(typer.Exit):
                 resolve_or_prompt_group(self.mock_db)
+
+    def test_min_cash_flow_empty_and_one_sided(self):
+        # No balances
+        self.assertEqual(min_cash_flow_settlements({}), [])
+
+        # Only creditors
+        self.assertEqual(min_cash_flow_settlements({"A": 10.0, "B": 0.0}), [])
+
+        # Only debtors
+        self.assertEqual(min_cash_flow_settlements({"A": -10.0}), [])
+
+        # All zeros
+        self.assertEqual(min_cash_flow_settlements({"A": 0.0, "B": 0.0}), [])
+
+    def test_min_cash_flow_simple_pair(self):
+        balances = {"A": -10.0, "B": 10.0}
+        result = min_cash_flow_settlements(balances)
+        self.assertEqual(result, [("A", "B", 10.0)])
+
+    def test_min_cash_flow_multiple_participants(self):
+        # Debtors: A=10, B=20 ; Creditors: C=15, D=15
+        balances = {"A": -10.0, "B": -20.0, "C": 15.0, "D": 15.0}
+        result = min_cash_flow_settlements(balances)
+        # Algorithm matches largest debtor with the largest creditor, then proceeds
+        expected = [("B", "C", 15.0), ("A", "D", 10.0), ("B", "D", 5.0)]
+        # Normalize result order for comparison since order may vary
+        self.assertEqual(Counter(result), Counter(expected))
+
+        # Conservation: total paid == total received == total positive == total negative
+        total_paid = round(sum(a for _, _, a in result), 2)
+        total_pos = round(sum(v for v in balances.values() if v > 0), 2)
+        total_neg = round(sum(-v for v in balances.values() if v < 0), 2)
+        self.assertEqual(total_paid, total_pos)
+        self.assertEqual(total_paid, total_neg)
+
+        # No self-transfers
+        self.assertTrue(all(d != c for d, c, _ in result))
+
+    def test_min_cash_flow_rounding_and_epsilon_zeroing(self):
+        # Tiny residuals below eps (0.01) are zeroed
+        balances_tiny = {"A": -0.004, "B": 0.004}
+        self.assertEqual(min_cash_flow_settlements(balances_tiny), [])
+
+        # Values near cents should round cleanly and still settle
+        balances_near = {"A": -10.004, "B": 10.004}
+        result = min_cash_flow_settlements(balances_near)
+        self.assertEqual(result, [("A", "B", 10.0)])
+
+    def test_min_cash_flow_unbalanced_lengths(self):
+        # More creditors than debtors
+        balances = {"A": -25.0, "B": 10.0, "C": 10.0, "D": 5.0}
+        result = min_cash_flow_settlements(balances)
+        # Expected matches in descending order
+        expected = [("A", "B", 10.0), ("A", "C", 10.0), ("A", "D", 5.0)]
+        self.assertEqual(result, expected)
+
+        # Conservation
+        total_paid = round(sum(a for _, _, a in result), 2)
+        total_pos = round(sum(v for v in balances.values() if v > 0), 2)
+        total_neg = round(sum(-v for v in balances.values() if v < 0), 2)
+        self.assertEqual(total_paid, total_pos)
+        self.assertEqual(total_paid, total_neg)
+

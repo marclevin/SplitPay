@@ -1,6 +1,8 @@
+import random
+
 import typer
 from typing_extensions import Annotated
-from app.utils.helpers import get_db_and_group
+from app.utils.helpers import get_db_and_group, MEMBER_COLORS
 from app.models import Member, Group
 
 member_app = typer.Typer(no_args_is_help=True)
@@ -18,7 +20,8 @@ def add(name: Annotated[str, typer.Argument(help="Name of the new member.")]):
             # If a member with the same name already exists, do not add
             typer.echo(f"❌ Member '{name}' already exists in group '{group.name}'.")
             raise typer.Exit()
-        new_member = Member(name=name, group_id=group.id)
+
+        new_member = Member(name=name, group_id=group.id, color=random.choice(MEMBER_COLORS))
         db.add(new_member)
         typer.echo(f"✅ Added member '{name}' to group '{group.name}'.")
 

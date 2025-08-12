@@ -113,23 +113,12 @@ class TestExpenseCommands(BaseCLITest):
     def test_show_expenses(self):
         """Test showing expenses when there are some"""
         # Create separate mock queries for each database call
-        mock_expense_query = MagicMock()
-        mock_expense_query.filter_by.return_value.all.return_value = [self.mock_expense]
-        mock_member_query = MagicMock()
-        mock_member_query.filter_by.return_value.first.return_value = self.mock_member1
-
-        mock_split_query = MagicMock()
-        mock_split_query.filter_by.return_value.all.return_value = [self.mock_split]
-
-        # Set up the query chain to return different mocks for different calls
-        self.mock_db.query.side_effect = [
-            mock_expense_query,  # First call: get expenses
-            mock_member_query,  # Second call: get payer
-            mock_split_query  # Third call: get splits
-        ]
+        # Mock expense query, returning a list with one expense
+        self.mock_db.query.return_value.filter_by.return_value.all.return_value = [self.mock_expense]
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
             result = self.runner.invoke(app, ["expense", "show"])
+            self.assertIn("Expenses in group", result.stdout)
             self.assertEqual(result.exit_code, 0)
 
     def test_show_no_expenses(self):

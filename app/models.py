@@ -22,6 +22,7 @@ class Member(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"))
+    color = Column(String, nullable=True)  # Optional color for display purposes
 
     group = relationship("Group", back_populates="members")
     expenses_paid = relationship("Expense", back_populates="payer", foreign_keys='Expense.paid_by_id')
