@@ -2,8 +2,9 @@ import typer
 from datetime import datetime
 from typing_extensions import Annotated
 from app.models import Member, Expense, ExpenseSplit
-from app.commands.group import get_db_and_group
+from app.utils.helpers import get_db_and_group
 import random
+
 
 expense_app = typer.Typer(no_args_is_help=True)
 
@@ -281,8 +282,9 @@ def show():
 
             split_details_str = ", ".join(split_details)
             payer_name = payer.name if payer else "Unknown"
+            date_str = expense.date.strftime("%Y-%m-%d") if isinstance(expense.date, datetime) else str(expense.date)
             colored_payer = typer.style(payer_name, fg=member_colors.get(payer_name))
-            header = f"💰[Expense ID {expense.id}] - {expense.description} (R{expense.amount})"
+            header = f"💰[Expense ID {expense.id}] - {expense.description} (R{expense.amount}) on {date_str}"
             typer.echo(header)
             typer.echo(
                 f"\t✅ Paid by: {colored_payer}\n\t👥 Splits: {split_details_str}"

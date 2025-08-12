@@ -1,7 +1,6 @@
 import typer
 from typing_extensions import Annotated
-
-from app.commands.group import get_db_and_group
+from app.utils.helpers import get_db_and_group
 from app.models import Member, Group
 
 member_app = typer.Typer(no_args_is_help=True)
@@ -13,6 +12,12 @@ def add(name: Annotated[str, typer.Argument(help="Name of the new member.")]):
     Add a new member to a group.
     """
     with get_db_and_group() as (db, group):
+        # Check for existing member with the same name in the same group
+        existing_member = db.query(Member).filter_by(name=name, group_id=group.id).first()
+        if existing_member:
+            # If a member with the same name already exists, do not add
+            typer.echo(f"❌ Member '{name}' already exists in group '{group.name}'.")
+            raise typer.Exit()
         new_member = Member(name=name, group_id=group.id)
         db.add(new_member)
         typer.echo(f"✅ Added member '{name}' to group '{group.name}'.")
