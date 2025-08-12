@@ -120,3 +120,51 @@ def resolve_or_prompt_group(db: Session) -> int:
 
     typer.echo("❌ Invalid selection.")
     raise typer.Exit()
+
+
+def min_cash_flow_settlements(balances: dict[str, float]) -> list[tuple[str, str, float]]:
+    """
+    Minimal-cash-flow settlement:
+    - Repeatedly match the most negative (largest debtor) with the most positive (largest creditor).
+    - Transfer the min(abs(debt), credit); update balances; continue until all ~0.
+    This yields few, high-value transfers and is stable with rounding.
+    """
+    # Copy and clean tiny residuals
+    eps = 0.01  # cents
+    b = {k: (0.0 if abs(v) < eps else round(v, 2)) for k, v in balances.items()}
+    creditors = [(k, v) for k, v in b.items() if v > 0]
+    debtors = [(k, -v) for k, v in b.items() if v < 0]  # store as positive amounts
+
+    # Nothing to do?
+    if not creditors or not debtors:
+        return []
+
+    # Work on mutables
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
+
+    i, j = 0, 0
+    res: list[tuple[str, str, float]] = []
+
+    while i < len(debtors) and j < len(creditors):
+        d_name, d_amt = debtors[i]
+        c_name, c_amt = creditors[j]
+
+        pay = round(min(d_amt, c_amt), 2)
+        if pay >= eps:
+            res.append((d_name, c_name, pay))
+
+        # Update remaining
+        d_rem = round(d_amt - pay, 2)
+        c_rem = round(c_amt - pay, 2)
+
+        debtors[i] = (d_name, d_rem)
+        creditors[j] = (c_name, c_rem)
+
+        # Advance pointers when side is cleared (within epsilon)
+        if d_rem <= eps:
+            i += 1
+        if c_rem <= eps:
+            j += 1
+
+    return res

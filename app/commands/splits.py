@@ -4,7 +4,7 @@ import typer
 from sqlalchemy import func
 
 from app.models import Member, Expense, ExpenseSplit, Payment
-from app.utils.helpers import get_db_and_group, MEMBER_COLORS, money, console
+from app.utils.helpers import get_db_and_group, MEMBER_COLORS, money, console, min_cash_flow_settlements
 
 split_app = typer.Typer(no_args_is_help=True)
 
@@ -21,9 +21,6 @@ def show():
         if not members:
             typer.echo("⚠️ No members found in group.")
             return
-
-        # Assign unique colors to each member for display
-        member_colors = {m.name: random.choice(MEMBER_COLORS) for m in members}
 
         # Collect per-member tallies
         rows = []  # [(name, paid, owed, repaid, received, net)]
@@ -53,7 +50,7 @@ def show():
             # Positive => others owe you; Negative => you owe others
             net = (total_paid + repaid) - (total_owed + received)
 
-            rows.append((m.name, total_paid, total_owed, repaid, received, net))
+            rows.append((m.name, m.color, total_paid, total_owed, repaid, received, net))
 
         # Stable ordering for display
         rows.sort(key=lambda r: r[0].lower())
@@ -67,9 +64,9 @@ def show():
         table.add_column("Received", justify="right")
         table.add_column("Net", justify="right")
 
-        for name, paid, owed, repaid, received, net in rows:
+        for name, color, paid, owed, repaid, received, net in rows:
             table.add_row(
-                f"[{member_colors[name]}]{name}[/{member_colors[name]}]",
+                f"[{color}]{name}[/{color}]",
                 money(paid),
                 money(owed),
                 money(repaid),
@@ -80,7 +77,9 @@ def show():
         console.print(table)
 
         # Build balances dict for settlement (name -> net rounded to cents)
-        balances = {name: round(net + 1e-9, 2) for (name, _, _, _, _, net) in rows}
+        balances = {name: round(net + 1e-9, 2) for (name, _, _, _, _, _, net) in rows}
+        # Create a color mapping for members, from their colors for the balances
+        member_color_map = {name: color for (name, color, _, _, _, _, _,) in rows}
 
         # Summary hints
         total_positive = round(sum(v for v in balances.values() if v > 0), 2)
@@ -88,7 +87,7 @@ def show():
         console.print(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(-total_negative)}")
 
         # Compute minimal set of payments to settle up
-        settlements = _min_cash_flow_settlements(balances)
+        settlements = min_cash_flow_settlements(balances)
 
         console.print("\n🔁 Suggested Settlements:")
         if not settlements:
@@ -96,57 +95,9 @@ def show():
         else:
             for debtor, creditor, amount in settlements:
                 console.print(
-                    f"➡️  [{member_colors[debtor]}]{debtor}[/{member_colors[debtor]}] pays "
-                    f"[{member_colors[creditor]}]{creditor}[/{member_colors[creditor]}] {money(amount)}"
+                    f"➡️  [{member_color_map[debtor]}]{debtor}[/{member_color_map[debtor]}] pays "
+                    f"[{member_color_map[creditor]}]{creditor}[/{member_color_map[creditor]}] {money(amount)}"
                 )
-
-
-def _min_cash_flow_settlements(balances: dict[str, float]) -> list[tuple[str, str, float]]:
-    """
-    Minimal-cash-flow settlement:
-    - Repeatedly match the most negative (largest debtor) with the most positive (largest creditor).
-    - Transfer the min(abs(debt), credit); update balances; continue until all ~0.
-    This yields few, high-value transfers and is stable with rounding.
-    """
-    # Copy and clean tiny residuals
-    eps = 0.01  # cents
-    b = {k: (0.0 if abs(v) < eps else round(v, 2)) for k, v in balances.items()}
-    creditors = [(k, v) for k, v in b.items() if v > 0]
-    debtors = [(k, -v) for k, v in b.items() if v < 0]  # store as positive amounts
-
-    # Nothing to do?
-    if not creditors or not debtors:
-        return []
-
-    # Work on mutables
-    creditors.sort(key=lambda x: x[1], reverse=True)
-    debtors.sort(key=lambda x: x[1], reverse=True)
-
-    i, j = 0, 0
-    res: list[tuple[str, str, float]] = []
-
-    while i < len(debtors) and j < len(creditors):
-        d_name, d_amt = debtors[i]
-        c_name, c_amt = creditors[j]
-
-        pay = round(min(d_amt, c_amt), 2)
-        if pay >= eps:
-            res.append((d_name, c_name, pay))
-
-        # Update remaining
-        d_rem = round(d_amt - pay, 2)
-        c_rem = round(c_amt - pay, 2)
-
-        debtors[i] = (d_name, d_rem)
-        creditors[j] = (c_name, c_rem)
-
-        # Advance pointers when side is cleared (within epsilon)
-        if d_rem <= eps:
-            i += 1
-        if c_rem <= eps:
-            j += 1
-
-    return res
 
 
 @split_app.command()

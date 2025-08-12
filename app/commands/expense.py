@@ -1,14 +1,14 @@
-import typer
 from datetime import datetime
 
+import typer
 from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 from typing_extensions import Annotated
+
 from app.models import Member, Expense, ExpenseSplit
-from app.utils.helpers import get_db_and_group, MEMBER_COLORS, console, money, date_str
-import random
+from app.utils.helpers import get_db_and_group, console, money, date_str
 
 expense_app = typer.Typer(no_args_is_help=True)
 
@@ -258,16 +258,14 @@ def show():
             raise typer.Exit()
 
         console.print(f"[bold]📊 Expenses in group '{group.name}':[/]\n")
-
-        # Assign unique colors to each member for display
-        member_colors = {m.name: random.choice(MEMBER_COLORS) for m in
-                         db.query(Member).filter_by(group_id=group.id).all()}
         for expense in expenses:
             # payer
-            payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
+            # Make sure we ensure this is a Member object
+
+            payer = expense.payer
 
             # splits
-            splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
+            splits = expense.splits
 
             # Header row (title + amount)
             header = Table.grid(expand=True)
@@ -285,7 +283,7 @@ def show():
             payer_line.add_column()
             payer_name = payer.name if payer else "Unknown"
             payer_line.add_row(
-                f"Paid by: [bold {member_colors[payer_name]}]{payer_name}[/]"
+                f"Paid by: [bold {payer.color}]{payer_name}[/]"
             )
 
             # Splits table
@@ -296,8 +294,9 @@ def show():
             total_shares = 0.0
             for s in splits:
                 mname = s.member.name if s.member else "Unknown"
+                mcolor = s.member.color if s.member else "white"
                 splits_table.add_row(
-                    f"[{member_colors[mname]}]{mname}[/]",
+                    f"[{mcolor}]{mname}[/]",
                     money(float(s.share_amount or 0.0)),
                 )
                 total_shares += float(s.share_amount or 0.0)
