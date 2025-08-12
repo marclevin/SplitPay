@@ -1,7 +1,9 @@
 import os
 from contextlib import contextmanager
+from datetime import datetime
 
 import typer
+from rich.console import Console
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -9,11 +11,37 @@ from app.models import Group
 
 SESSION_FILE = ".eco_session"
 
+MEMBER_COLORS = [
+    "bright_blue",
+    "bright_magenta",
+    "bright_yellow",
+    "bright_cyan",
+    "yellow",
+    "blue",
+    "magenta"
+]
+console = Console()
+
+
+def money(x: float) -> str:
+    color = "green" if x >= 0 else "red"
+    return f"[{color}]R{round(x + 1e-9, 2):,.2f}[/{color}]"
+
 
 def set_active_group_id(group_id: int):
     with open(SESSION_FILE, "w") as f:
         f.write(str(group_id))
         f.close()
+
+
+def date_str(d) -> str:
+    if isinstance(d, datetime):
+        return d.strftime("%Y-%m-%d")
+    try:
+        # handle date, datetime.date, or string-ish
+        return d.strftime("%Y-%m-%d")
+    except AttributeError:
+        return str(d)
 
 
 def get_active_group_id() -> int | None:

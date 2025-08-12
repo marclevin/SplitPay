@@ -79,7 +79,7 @@ def show():
     with get_db() as db:
         groups = db.query(Group).all()
         if not groups:
-            typer.echo("❌ No groups found.")
+            typer.echo("❌ No groups found, please create one first.")
             raise typer.Exit()
         typer.echo("📂 Groups:")
         for group in groups:

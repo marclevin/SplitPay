@@ -1,26 +1,16 @@
 import typer
 from datetime import datetime
+
+from rich import box
+from rich.console import Group
+from rich.panel import Panel
+from rich.table import Table
 from typing_extensions import Annotated
 from app.models import Member, Expense, ExpenseSplit
-from app.utils.helpers import get_db_and_group
+from app.utils.helpers import get_db_and_group, MEMBER_COLORS, console, money, date_str
 import random
 
-
 expense_app = typer.Typer(no_args_is_help=True)
-
-# List of colors for member names
-MEMBER_COLORS = [
-    "bright_blue",
-    "bright_green",
-    "bright_magenta",
-    "bright_yellow",
-    "bright_cyan",
-    "bright_red",
-    "green",
-    "yellow",
-    "blue",
-    "magenta"
-]
 
 
 @expense_app.command()
@@ -36,6 +26,14 @@ def add(
     """
     # Prompt the user for the members to split the expense with.
     with get_db_and_group() as (db, group):
+        # Check if the payer exists in the current group
+        if not isinstance(amount, (int, float)) or amount <= 0:
+            typer.echo("❌ Amount must be a positive number.")
+            raise typer.Exit()
+        payer = db.query(Member).filter(Member.name == paid_by, Member.group_id == group.id).first()
+        if not payer:
+            typer.echo(f"❌ Payer '{paid_by}' not found in the selected group.")
+            raise typer.Exit()
         members = []
         typer.echo("👥 Enter the name of a member this expense will be split with (Enter nothing to stop):")
         while True:
@@ -45,17 +43,18 @@ def add(
                 break
             if not member or member == "" or len(member) == 0:
                 break
-            members.append(member)
             # Check if the member exists at all.
             member_obj = db.query(Member).filter(Member.name == member).first()
+            # Now check if the member is the payer, we don't want to add the payer to the split list.
+            if member_obj and member_obj.id == payer.id:
+                typer.echo("❌ Payer cannot be included in the split list.")
+                continue
             if not member_obj:
-                typer.echo(f"❌ Member '{member}' not found.")
-                raise typer.Exit()
+                typer.echo(f"❌ Member '{member}' not found, please add them first.")
+                continue
+            # If the member exists, add them to the list.
+            members.append(member)
 
-        payer = db.query(Member).filter(Member.name == paid_by, Member.group_id == group.id).first()
-        if not payer:
-            typer.echo(f"❌ Payer '{paid_by}' not found in the selected group.")
-            raise typer.Exit()
         split_between = members if members else [payer.name]
 
         members = db.query(Member).filter(Member.name.in_(split_between), Member.group_id == group.id).all()
@@ -245,50 +244,87 @@ def edit(expense_id: int):
 @expense_app.command()
 def show():
     """
-    Show all expenses in the current group.
+    Show all expenses in the current group, rendered as high-quality Rich panels.
     """
     with get_db_and_group() as (db, group):
-        expenses = db.query(Expense).filter_by(group_id=group.id).all()
+        expenses = (
+            db.query(Expense)
+            .filter_by(group_id=group.id)
+            .order_by(Expense.date.desc(), Expense.id.desc())
+            .all()
+        )
         if not expenses:
-            typer.echo("No expenses found in the current group.")
+            console.print(Panel("No expenses found in the current group.", title="📊 Expenses", box=box.ROUNDED))
             raise typer.Exit()
 
-        typer.echo(f"📊 Expenses in group '{group.name}':")
+        console.print(f"[bold]📊 Expenses in group '{group.name}':[/]\n")
 
-        member_colors: dict[str, str] = {}
-
+        # Assign unique colors to each member for display
+        member_colors = {m.name: random.choice(MEMBER_COLORS) for m in
+                         db.query(Member).filter_by(group_id=group.id).all()}
         for expense in expenses:
-            # 1) payer (2nd query in the test's side_effect)
+            # payer
             payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
 
-            # 2) splits (3rd query in the test's side_effect)
+            # splits
             splits = db.query(ExpenseSplit).filter_by(expense_id=expense.id).all()
 
-            # Assign colors for split members on the fly
-            for split in splits:
-                name = split.member.name
-                if name not in member_colors:
-                    member_colors[name] = random.choice(MEMBER_COLORS)
+            # Header row (title + amount)
+            header = Table.grid(expand=True)
+            header.add_column(justify="left", ratio=3)
+            header.add_column(justify="right", ratio=1)
 
-            # Ensure payer has a color even if not in splits
-            if payer and payer.name not in member_colors:
-                member_colors[payer.name] = random.choice(MEMBER_COLORS)
-
-            # Build display
-            split_details = []
-            for split in splits:
-                colored_name = typer.style(split.member.name, fg=member_colors.get(split.member.name))
-                split_details.append(f"{colored_name}: R{split.share_amount}")
-
-            split_details_str = ", ".join(split_details)
-            payer_name = payer.name if payer else "Unknown"
-            date_str = expense.date.strftime("%Y-%m-%d") if isinstance(expense.date, datetime) else str(expense.date)
-            colored_payer = typer.style(payer_name, fg=member_colors.get(payer_name))
-            header = f"💰[Expense ID {expense.id}] - {expense.description} (R{expense.amount}) on {date_str}"
-            typer.echo(header)
-            typer.echo(
-                f"\t✅ Paid by: {colored_payer}\n\t👥 Splits: {split_details_str}"
+            title_left = (
+                f"[b]{expense.description}[/]\n"
+                f"[dim]ID #{expense.id} • {date_str(expense.date)}[/dim]"
             )
+            header.add_row(title_left, f"[b]{money(expense.amount)}[/b]")
+
+            # Payer line
+            payer_line = Table.grid()
+            payer_line.add_column()
+            payer_name = payer.name if payer else "Unknown"
+            payer_line.add_row(
+                f"Paid by: [bold {member_colors[payer_name]}]{payer_name}[/]"
+            )
+
+            # Splits table
+            splits_table = Table(box=box.SIMPLE_HEAVY, expand=True, show_edge=True)
+            splits_table.add_column("Member", style="bold", ratio=3)
+            splits_table.add_column("Share", justify="right", ratio=1)
+
+            total_shares = 0.0
+            for s in splits:
+                mname = s.member.name if s.member else "Unknown"
+                splits_table.add_row(
+                    f"[{member_colors[mname]}]{mname}[/]",
+                    money(float(s.share_amount or 0.0)),
+                )
+                total_shares += float(s.share_amount or 0.0)
+
+            # Footer / consistency note
+            footer = Table.grid(expand=True)
+            footer.add_column(justify="left", ratio=3)
+            footer.add_column(justify="right", ratio=1)
+            # Compare split total to expense amount
+            delta = round((total_shares or 0.0) - float(expense.amount or 0.0), 2)
+            if abs(delta) < 0.01:
+                footer.add_row("[dim]Splits total[/dim]", f"[dim]{money(total_shares)}[/dim]")
+            else:
+                # highlight mismatch
+                footer.add_row(
+                    "[yellow]⚠ Splits total (mismatch)[/]",
+                    f"[yellow]{money(total_shares)}[/]",
+                )
+
+            # Assemble the card
+            card = Panel(
+                Group(header, payer_line, splits_table, footer),
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+
+            console.print(card)
 
 
 @expense_app.command()

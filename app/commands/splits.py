@@ -1,9 +1,14 @@
+import random
+
 import typer
 from sqlalchemy import func
 
 from app.models import Member, Expense, ExpenseSplit, Payment
-from app.utils.helpers import get_db_and_group
+from app.utils.helpers import get_db_and_group, MEMBER_COLORS, money, console
+
 split_app = typer.Typer(no_args_is_help=True)
+
+from rich.table import Table
 
 
 @split_app.command()
@@ -16,6 +21,9 @@ def show():
         if not members:
             typer.echo("⚠️ No members found in group.")
             return
+
+        # Assign unique colors to each member for display
+        member_colors = {m.name: random.choice(MEMBER_COLORS) for m in members}
 
         # Collect per-member tallies
         rows = []  # [(name, paid, owed, repaid, received, net)]
@@ -50,26 +58,26 @@ def show():
         # Stable ordering for display
         rows.sort(key=lambda r: r[0].lower())
 
-        # Pretty print table
-        def money(x: float) -> str:
-            return f"R{round(x + 1e-9, 2):,.2f}"
+        # Create a Rich table
+        table = Table(title=f"💸 Group Balances for '{group.name}'")
+        table.add_column("Member", style="bold")
+        table.add_column("Paid", justify="right")
+        table.add_column("Owed", justify="right")
+        table.add_column("Repaid", justify="right")
+        table.add_column("Received", justify="right")
+        table.add_column("Net", justify="right")
 
-        # Compute column widths
-        headers = ["Member", "Paid", "Owed", "Repaid", "Received", "Net"]
-        str_rows = [
-            [name, money(paid), money(owed), money(repaid), money(received), money(net)]
-            for (name, paid, owed, repaid, received, net) in rows
-        ]
-        col_widths = [max(len(h), *(len(r[i]) for r in str_rows)) for i, h in enumerate(headers)]
+        for name, paid, owed, repaid, received, net in rows:
+            table.add_row(
+                f"[{member_colors[name]}]{name}[/{member_colors[name]}]",
+                money(paid),
+                money(owed),
+                money(repaid),
+                money(received),
+                money(net),
+            )
 
-        def fmt_line(cells):
-            return "  ".join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells))
-
-        typer.echo(f"💸 Group Balances for '{group.name}':")
-        typer.echo(fmt_line(headers))
-        typer.echo(fmt_line(["-" * w for w in col_widths]))
-        for r in str_rows:
-            typer.echo(fmt_line(r))
+        console.print(table)
 
         # Build balances dict for settlement (name -> net rounded to cents)
         balances = {name: round(net + 1e-9, 2) for (name, _, _, _, _, net) in rows}
@@ -77,17 +85,20 @@ def show():
         # Summary hints
         total_positive = round(sum(v for v in balances.values() if v > 0), 2)
         total_negative = round(sum(-v for v in balances.values() if v < 0), 2)
-        typer.echo(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(total_negative)}")
+        console.print(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(-total_negative)}")
 
         # Compute minimal set of payments to settle up
         settlements = _min_cash_flow_settlements(balances)
 
-        typer.echo("\n🔁 Suggested Settlements:")
+        console.print("\n🔁 Suggested Settlements:")
         if not settlements:
-            typer.echo("Everyone is settled up! 🎉")
+            console.print("Everyone is settled up! 🎉")
         else:
             for debtor, creditor, amount in settlements:
-                typer.echo(f"➡️  {debtor} pays {creditor} {money(amount)}")
+                console.print(
+                    f"➡️  [{member_colors[debtor]}]{debtor}[/{member_colors[debtor]}] pays "
+                    f"[{member_colors[creditor]}]{creditor}[/{member_colors[creditor]}] {money(amount)}"
+                )
 
 
 def _min_cash_flow_settlements(balances: dict[str, float]) -> list[tuple[str, str, float]]:
@@ -136,6 +147,7 @@ def _min_cash_flow_settlements(balances: dict[str, float]) -> list[tuple[str, st
             j += 1
 
     return res
+
 
 @split_app.command()
 def payment(from_member: str, to_member: str, amount: float):
