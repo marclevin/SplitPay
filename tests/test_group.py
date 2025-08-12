@@ -1,10 +1,7 @@
-import unittest
-from typer.testing import CliRunner
 from unittest.mock import patch, MagicMock
-from tests.base import BaseCLITest
-from cli import app
 
-runner = CliRunner()
+from cli import app
+from tests.base import BaseCLITest
 
 
 class TestGroupCommands(BaseCLITest):
@@ -22,7 +19,7 @@ class TestGroupCommands(BaseCLITest):
             MagicMock(name="Group2", id=2)
         ]
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "select"], input="1\n")
+            result = self.runner.invoke(app, ["group", "select"], input="1\n")
             self.assertEqual(result.exit_code, 0)
 
     @patch('app.commands.group.set_active_group_id')
@@ -34,7 +31,7 @@ class TestGroupCommands(BaseCLITest):
             MagicMock(name="Group2", id=2)
         ]
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "select"], input="3\n")
+            result = self.runner.invoke(app, ["group", "select"], input="3\n")
             self.assertEqual(result.exit_code, 0)
             self.assertIn("❌ Invalid selection.", result.stdout)
 
@@ -45,7 +42,7 @@ class TestGroupCommands(BaseCLITest):
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = None
         mock_set_active_group_id.return_value = None
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "create", "test_group"])
+            result = self.runner.invoke(app, ["group", "create", "test_group"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("✅ Created group 'test_group'", result.stdout)
 
@@ -53,7 +50,7 @@ class TestGroupCommands(BaseCLITest):
         # Test if we cannot create a group that already exists
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = MagicMock()
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "create", "existing_group"])
+            result = self.runner.invoke(app, ["group", "create", "existing_group"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("❌ Group 'existing_group' already exists.", result.stdout)
 
@@ -69,7 +66,7 @@ class TestGroupCommands(BaseCLITest):
         mock_get_active_group_id.return_value = group.id
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = group
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "delete", "test_group"])
+            result = self.runner.invoke(app, ["group", "delete", "test_group"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("✅ Deleted group 'test_group'", result.stdout)
 
@@ -77,7 +74,7 @@ class TestGroupCommands(BaseCLITest):
         # Test if we cannot delete a group that doesn't exist
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = None
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "delete", "nonexistent_group"])
+            result = self.runner.invoke(app, ["group", "delete", "nonexistent_group"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("❌ Group 'nonexistent_group' not found.", result.stdout)
 
@@ -88,13 +85,13 @@ class TestGroupCommands(BaseCLITest):
             MagicMock(name="Group2", id=2)
         ]
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "show"])
+            result = self.runner.invoke(app, ["group", "show"])
             self.assertEqual(result.exit_code, 0)
 
     def test_show_no_groups(self):
         self.mock_db.query.return_value.all.return_value = []
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "show"])
+            result = self.runner.invoke(app, ["group", "show"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("❌ No groups found.", result.stdout)
 
@@ -102,7 +99,7 @@ class TestGroupCommands(BaseCLITest):
     def test_current(self):
         # Test if we can show the current group, our base sets this, so we can just call it
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "current"])
+            result = self.runner.invoke(app, ["group", "current"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("📁 Current group: 'TestGroup'", result.stdout)
 
@@ -113,8 +110,6 @@ class TestGroupCommands(BaseCLITest):
         mock_clear_active_group = MagicMock()
         mock_clear_active_group.return_value = None
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = runner.invoke(app, ["group", "clear-session"])
+            result = self.runner.invoke(app, ["group", "clear-session"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("🧹 Session cleared.", result.stdout)
-    
-    

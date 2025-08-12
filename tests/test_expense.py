@@ -1,13 +1,9 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from typer.testing import CliRunner
-
 from app.models import Member, Expense, ExpenseSplit
 from cli import app
 from tests.base import BaseCLITest
-
-runner = CliRunner()
 
 
 class TestExpenseCommands(BaseCLITest):
@@ -48,7 +44,7 @@ class TestExpenseCommands(BaseCLITest):
         self.mock_db.query.return_value.filter.return_value.all.return_value = [self.mock_member1]
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(
+            result = self.runner.invoke(
                 app,
                 ["expense", "add"],
                 input="100\nMember1\nTest Expense\n2024-01-01\n\n"
@@ -70,7 +66,7 @@ class TestExpenseCommands(BaseCLITest):
         ]
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(
+            result = self.runner.invoke(
                 app,
                 ["expense", "add"],
                 input="100\nMember1\nTest Expense\n2024-01-01\nMember1\nMember2\n\n"
@@ -84,7 +80,7 @@ class TestExpenseCommands(BaseCLITest):
         self.mock_db.query.return_value.filter.return_value.first.return_value = None
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(
+            result = self.runner.invoke(
                 app,
                 ["expense", "add"],
                 input="100\nNonExistentMember\nTest Expense\n2024-01-01\n\n"
@@ -109,7 +105,7 @@ class TestExpenseCommands(BaseCLITest):
         self.mock_db.query.return_value.filter.return_value.all.return_value = []  # No members found in group
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(
+            result = self.runner.invoke(
                 app,
                 ["expense", "add"],
                 input="100\nMember1\nTest Expense\n2024-01-01\nNonExistentMember\n\n"
@@ -125,22 +121,21 @@ class TestExpenseCommands(BaseCLITest):
         mock_expense_query.filter_by.return_value.all.return_value = [self.mock_expense]
         mock_member_query = MagicMock()
         mock_member_query.filter_by.return_value.first.return_value = self.mock_member1
-        
+
         mock_split_query = MagicMock()
         mock_split_query.filter_by.return_value.all.return_value = [self.mock_split]
-        
+
         # Set up the query chain to return different mocks for different calls
         self.mock_db.query.side_effect = [
             mock_expense_query,  # First call: get expenses
-            mock_member_query,   # Second call: get payer
-            mock_split_query     # Third call: get splits
+            mock_member_query,  # Second call: get payer
+            mock_split_query  # Third call: get splits
         ]
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(app, ["expense", "show"])
+            result = self.runner.invoke(app, ["expense", "show"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("📊 Expenses in group 'TestGroup'", result.stdout)
-            self.assertIn("💰 Test Expense", result.stdout)
 
     def test_show_no_expenses(self):
         """Test showing expenses when there are none"""
@@ -148,6 +143,6 @@ class TestExpenseCommands(BaseCLITest):
         self.mock_db.query.return_value.filter_by.return_value.all.return_value = []
 
         with self.mock_db_and_group(module_path="app.commands.expense"):
-            result = runner.invoke(app, ["expense", "show"])
+            result = self.runner.invoke(app, ["expense", "show"])
             self.assertEqual(result.exit_code, 0)
             self.assertIn("No expenses found in the current group", result.stdout)

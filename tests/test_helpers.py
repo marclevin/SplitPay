@@ -5,7 +5,6 @@ from unittest.mock import patch, mock_open, MagicMock
 import typer
 
 from app.models import Group
-from tests.base import BaseCLITest
 from app.utils.helpers import (
     set_active_group_id,
     get_active_group_id,
@@ -14,6 +13,7 @@ from app.utils.helpers import (
     get_db_and_group,
     resolve_or_prompt_group,
 )
+from tests.base import BaseCLITest
 
 
 class TestHelpers(BaseCLITest):
@@ -98,8 +98,8 @@ class TestHelpers(BaseCLITest):
         If only one group exists, it should be auto-selected and returned.
         """
         self.mock_db.query.return_value.all.return_value = [self.mock_group]
-        self.patches["app.utils.helpers.get_active_group_id"].return_value = None
-        with patch("app.utils.helpers.set_active_group_id") as mock_set_id:
+        with patch("app.utils.helpers.get_active_group_id", return_value=None), \
+                patch("app.utils.helpers.set_active_group_id") as mock_set_id:
             gid = resolve_or_prompt_group(self.mock_db)
             self.assertEqual(gid, 1)
             mock_set_id.assert_called_once_with(1)
@@ -112,8 +112,8 @@ class TestHelpers(BaseCLITest):
         group2.id = 2
         group2.name = "SecondGroup"
         self.mock_db.query.return_value.all.return_value = [self.mock_group, group2]
-        self.patches["app.utils.helpers.get_active_group_id"].return_value = None
-        with patch("typer.prompt", return_value="2"), patch("app.utils.helpers.set_active_group_id") as mock_set_id:
+        with patch("app.utils.helpers.get_active_group_id", return_value=None), \
+                patch("typer.prompt", return_value="2"), patch("app.utils.helpers.set_active_group_id") as mock_set_id:
             gid = resolve_or_prompt_group(self.mock_db)
             self.assertEqual(gid, 2)
             mock_set_id.assert_called_once_with(2)
@@ -126,7 +126,7 @@ class TestHelpers(BaseCLITest):
         group2.id = 2
         group2.name = "SecondGroup"
         self.mock_db.query.return_value.all.return_value = [self.mock_group, group2]
-        self.patches["app.utils.helpers.get_active_group_id"].return_value = None
-        with patch("typer.prompt", return_value="x"):
+        with patch("app.utils.helpers.get_active_group_id", return_value=None), \
+                patch("typer.prompt", return_value="x"):
             with self.assertRaises(typer.Exit):
                 resolve_or_prompt_group(self.mock_db)
