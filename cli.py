@@ -5,7 +5,7 @@ from app.commands.member import member_app
 from app.commands.expense import expense_app
 from app.commands.splits import split_app
 
-
+# CLI application for managing group expenses, members, and splits
 app = typer.Typer(no_args_is_help=True)
 app.add_typer(group_app, name="group", help="Group management commands.")
 app.add_typer(member_app, name="member", help="Member management commands.")
