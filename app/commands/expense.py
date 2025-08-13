@@ -132,11 +132,9 @@ def edit(expense_id: int):
 
         # Date (accept YYYY-MM-DD)
         typer.echo(
-            f"Current date: {expense.date.strftime('%Y-%m-%d') if isinstance(expense.date, datetime) else expense.date}")
+            f"Current date: {date_str(expense.date)}")
         new_date_input = typer.prompt("Date (YYYY-MM-DD)",
-                                      default=expense.date.strftime("%Y-%m-%d") if isinstance(expense.date,
-                                                                                              datetime) else str(
-                                          expense.date))
+                                      default=date_str(expense.date))
         try:
             new_date = datetime.fromisoformat(new_date_input)
         except ValueError:
@@ -146,10 +144,15 @@ def edit(expense_id: int):
         # Payer (must exist in current group)
         typer.echo(f"Current paid by: {current_payer_name}")
         new_payer_name = typer.prompt("Paid by (member name)", default=current_payer_name).strip()
-        payer = db.query(Member).filter(
-            Member.name == new_payer_name,
-            Member.group_id == group.id
-        ).first()
+        # If we haven't changed the payer, we can skip this check
+        if new_payer_name != current_payer_name:
+            payer = db.query(Member).filter(
+                Member.name == new_payer_name,
+                Member.group_id == group.id
+            ).first()
+        else:
+            # If we are keeping the same payer, just use the current one
+            payer = current_payer
         if not payer:
             typer.echo(f"❌ Payer '{new_payer_name}' not found in the selected group.")
             raise typer.Exit()
@@ -238,7 +241,7 @@ def edit(expense_id: int):
         payer_name_display = db.query(Member).filter_by(
             id=expense.paid_by_id).first().name if expense.paid_by_id else "Unknown"
         typer.echo(
-            f"✅ Expense ID {expense_id} updated. ({expense.description}, R{expense.amount}, paid by {payer_name_display} on {expense.date.strftime('%Y-%m-%d')})")
+            f"✅ Expense ID {expense_id} updated. ({expense.description}, R{expense.amount}, paid by {payer_name_display} on {date_str(expense.date)})")
 
 
 @expense_app.command()
@@ -260,8 +263,6 @@ def show():
         console.print(f"[bold]📊 Expenses in group '{group.name}':[/]\n")
         for expense in expenses:
             # payer
-            # Make sure we ensure this is a Member object
-
             payer = expense.payer
 
             # splits
@@ -276,7 +277,7 @@ def show():
                 f"[b]{expense.description}[/]\n"
                 f"[dim]ID #{expense.id} • {date_str(expense.date)}[/dim]"
             )
-            header.add_row(title_left, f"[b]{money(expense.amount)}[/b]")
+            header.add_row(title_left, f"[b]{money(-expense.amount)}[/b]")
 
             # Payer line
             payer_line = Table.grid()
@@ -353,7 +354,7 @@ def delete(
         # Fetch some context for a helpful prompt/message
         payer = db.query(Member).filter_by(id=expense.paid_by_id).first()
         payer_name = payer.name if payer else "Unknown"
-        date_str = expense.date.strftime("%Y-%m-%d") if isinstance(expense.date, datetime) else str(expense.date)
+        date_expense = date_str(expense.date)
 
         # Confirmation (unless --yes given)
         if not yes:
@@ -361,7 +362,7 @@ def delete(
             typer.echo(f"   • ID: {expense.id}")
             typer.echo(f"   • Description: {expense.description}")
             typer.echo(f"   • Amount: R{expense.amount}")
-            typer.echo(f"   • Paid by: {payer_name} on {date_str}")
+            typer.echo(f"   • Paid by: {payer_name} on {date_expense}")
             if not typer.confirm("Proceed with deletion?"):
                 typer.echo("Cancelled.")
                 raise typer.Exit()
