@@ -212,7 +212,7 @@ class TestExpenseCommands(BaseCLITest):
             result = self.runner.invoke(app, ["expense", "delete", "7"], input="n\n")
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Cancelled.", result.stdout)
+        self.assertIn("❌ Deletion cancelled", result.stdout)
         self.mock_db.delete.assert_not_called()
         self.mock_db.commit.assert_not_called()
         self.mock_db.rollback.assert_not_called()

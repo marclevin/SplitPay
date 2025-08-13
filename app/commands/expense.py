@@ -19,7 +19,7 @@ def add(
         paid_by: Annotated[str, typer.Option(help="Name of the member who paid.", prompt=True)],
         description: Annotated[str, typer.Option(help="Description of the expense.", prompt=True)],
         date_of_expense: Annotated[
-            datetime, typer.Option(help="Date of the expense (YYYY-MM-DD).", prompt=True)] = datetime.now(),
+            datetime, typer.Option(help="Date of the expense (YYYY-MM-DD).", prompt=True)] = date_str(datetime.now()),
 ):
     """
     Add a new expense.
@@ -364,7 +364,7 @@ def delete(
             typer.echo(f"   • Amount: R{expense.amount}")
             typer.echo(f"   • Paid by: {payer_name} on {date_expense}")
             if not typer.confirm("Proceed with deletion?"):
-                typer.echo("Cancelled.")
+                typer.echo("❌ Deletion cancelled.")
                 raise typer.Exit()
 
         try:

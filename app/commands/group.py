@@ -2,7 +2,7 @@ import typer
 
 from app.models import Group
 from app.utils.helpers import get_db, set_active_group_id, clear_active_group, get_db_and_group, get_active_group_id
-
+from typing_extensions import Annotated
 group_app = typer.Typer(no_args_is_help=True,short_help="Group management commands.")
 
 
@@ -87,7 +87,9 @@ def show():
 
 
 @group_app.command()
-def delete(name: str):
+def delete(name: str,
+           yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation and delete immediately.")] = False,
+           ):
     """
     Delete a group by name.
     WARNING: This deletes all associated members, expenses, and payments.
@@ -98,10 +100,30 @@ def delete(name: str):
             typer.echo(f"❌ Group '{name}' not found.")
             raise typer.Exit()
 
-        # Check if the group is currently selected
-        if group.id == get_active_group_id():
-            clear_active_group()
+        # Fetch some context for a helpful prompt / message
+        members_count = len(group.members)
+        expenses_count = len(group.expenses)
+        payments_count = len(group.payments)
+        if not yes:
+            typer.echo(f"🗑️ You are about to delete:")
+            typer.echo(f"  • Group: {group.name} (ID: {group.id})")
+            typer.echo(f"  • Members: {members_count}")
+            typer.echo(f"  • Expenses: {expenses_count}")
+            typer.echo(f"  • Payments: {payments_count}")
+            if not typer.confirm("Proceed with deletion?"):
+                typer.echo("❌ Deletion cancelled.")
+                raise typer.Exit()
 
-        db.delete(group)
-        db.commit()
-        typer.echo(f"✅ Deleted group '{name}'.")
+        try:
+            db.delete(group)
+            db.commit()
+            typer.echo(f"✅ Deleted group '{name}' (ID: {group.id}).")
+            # Clear if this group was the active one
+            if group.id == get_active_group_id():
+                clear_active_group()
+        except Exception as e:
+            db.rollback()
+            typer.echo(f"❌ Failed to delete group '{name}': {e}")
+            raise typer.Exit(code=1)
+
+

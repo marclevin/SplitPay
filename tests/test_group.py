@@ -63,7 +63,7 @@ class TestGroupCommands(BaseCLITest):
         mock_get_active_group_id.return_value = group.id
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = group
         with self.mock_db_and_group(module_path="app.commands.group"):
-            result = self.runner.invoke(app, ["group", "delete", "test_group"])
+            result = self.runner.invoke(app, ["group", "delete", "test_group", "--yes"])
             self.assertEqual(result.exit_code, 0)
 
     def test_delete_nonexistent(self):
