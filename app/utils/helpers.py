@@ -1,6 +1,7 @@
 import os
 from contextlib import contextmanager
 from datetime import datetime
+from typing import Any, Generator
 
 import typer
 from rich.console import Console
@@ -18,14 +19,18 @@ MEMBER_COLORS = [
     "bright_cyan",
     "yellow",
     "blue",
-    "magenta"
+    "magenta",
+    "cyan",
+    "bright_white",
 ]
 console = Console()
 
 
 def money(x: float) -> str:
     color = "green" if x >= 0 else "red"
-    return f"[{color}]R{round(x + 1e-9, 2):,.2f}[/{color}]"
+    neg = "-" if x < 0 else ""
+    x = abs(x)
+    return f"[{color}]{neg}R{round(x + 1e-9, 2):,.2f}[/{color}]"
 
 
 def set_active_group_id(group_id: int):
@@ -57,7 +62,7 @@ def clear_active_group():
 
 
 @contextmanager
-def get_db_and_group() -> tuple[Session, Group] | None:
+def get_db_and_group() -> Generator[tuple[Any, Any], Any, None]:
     db = SessionLocal()
     try:
         group_id = resolve_or_prompt_group(db)
@@ -76,7 +81,7 @@ def get_db_and_group() -> tuple[Session, Group] | None:
 
 
 @contextmanager
-def get_db() -> Session:
+def get_db() -> Generator[Any, Any, None]:
     db = SessionLocal()
     try:
         yield db

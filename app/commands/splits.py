@@ -1,10 +1,9 @@
-import random
 
 import typer
 from sqlalchemy import func
 
 from app.models import Member, Expense, ExpenseSplit, Payment
-from app.utils.helpers import get_db_and_group, MEMBER_COLORS, money, console, min_cash_flow_settlements
+from app.utils.helpers import get_db_and_group, money, console, min_cash_flow_settlements
 
 split_app = typer.Typer(no_args_is_help=True)
 
@@ -83,8 +82,8 @@ def show():
 
         # Summary hints
         total_positive = round(sum(v for v in balances.values() if v > 0), 2)
-        total_negative = round(sum(-v for v in balances.values() if v < 0), 2)
-        console.print(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(-total_negative)}")
+        total_negative = round(sum(v for v in balances.values() if v < 0), 2)
+        console.print(f"\nΣ owed to creditors: {money(total_positive)} | Σ owed by debtors: {money(total_negative)}")
 
         # Compute minimal set of payments to settle up
         settlements = min_cash_flow_settlements(balances)
