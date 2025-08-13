@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
-from tests.base import BaseCLITest
 from app.commands.splits import split_app
+from tests.base import BaseCLITest
 
 
 class TestSplits(BaseCLITest):
@@ -19,6 +19,7 @@ class TestSplits(BaseCLITest):
             mock_member = MagicMock()
             mock_member.id = 1
             mock_member.name = "Alice"
+            mock_member.color = "blue"
 
             self.mock_db.query.return_value.filter_by.return_value.all.return_value = [mock_member]
 

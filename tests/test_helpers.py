@@ -1,5 +1,6 @@
 # tests/test_helpers.py
 
+from collections import Counter
 from unittest.mock import patch, mock_open, MagicMock
 
 import typer
@@ -14,7 +15,6 @@ from app.utils.helpers import (
     resolve_or_prompt_group,
     min_cash_flow_settlements
 )
-from collections import Counter
 from tests.base import BaseCLITest
 
 
@@ -89,7 +89,7 @@ class TestHelpers(BaseCLITest):
         Ensure typer.Exit is raised and rollback is called if group cannot be found.
         """
         self.mock_db.query.return_value.filter_by.return_value.first.return_value = None
-        with self.assertRaises(typer.Exit):
+        with self.assertRaises(typer.Exit), patch("typer.echo"):
             with get_db_and_group():
                 pass
         self.mock_db.rollback.assert_called_once()
@@ -101,7 +101,7 @@ class TestHelpers(BaseCLITest):
         """
         self.mock_db.query.return_value.all.return_value = [self.mock_group]
         with patch("app.utils.helpers.get_active_group_id", return_value=None), \
-                patch("app.utils.helpers.set_active_group_id") as mock_set_id:
+                patch("typer.echo"), patch("app.utils.helpers.set_active_group_id") as mock_set_id:
             gid = resolve_or_prompt_group(self.mock_db)
             self.assertEqual(gid, 1)
             mock_set_id.assert_called_once_with(1)
@@ -115,7 +115,7 @@ class TestHelpers(BaseCLITest):
         group2.name = "SecondGroup"
         self.mock_db.query.return_value.all.return_value = [self.mock_group, group2]
         with patch("app.utils.helpers.get_active_group_id", return_value=None), \
-                patch("typer.prompt", return_value="2"), patch("app.utils.helpers.set_active_group_id") as mock_set_id:
+                patch("typer.prompt", return_value="2"), patch("typer.echo"), patch("app.utils.helpers.set_active_group_id") as mock_set_id:
             gid = resolve_or_prompt_group(self.mock_db)
             self.assertEqual(gid, 2)
             mock_set_id.assert_called_once_with(2)
@@ -129,7 +129,7 @@ class TestHelpers(BaseCLITest):
         group2.name = "SecondGroup"
         self.mock_db.query.return_value.all.return_value = [self.mock_group, group2]
         with patch("app.utils.helpers.get_active_group_id", return_value=None), \
-                patch("typer.prompt", return_value="x"):
+                patch("typer.prompt", return_value="x"), patch("typer.echo"):
             with self.assertRaises(typer.Exit):
                 resolve_or_prompt_group(self.mock_db)
 
@@ -194,4 +194,3 @@ class TestHelpers(BaseCLITest):
         total_neg = round(sum(-v for v in balances.values() if v < 0), 2)
         self.assertEqual(total_paid, total_pos)
         self.assertEqual(total_paid, total_neg)
-
