@@ -1,5 +1,5 @@
 # Introduction
-SplitPay is a simple command‑line utility for managing shared expenses.
+SplitPay is a simple command-line utility for managing shared expenses.
 It lets you create groups, add members, record expenses, and track who
 owes what, all from your terminal.  
 PostgreSQL is used for data storage, SQLAlchemy for ORM, and Alembic for
@@ -41,7 +41,7 @@ schema migrations.
     DB_NAME=splitpay
     DB_HOST=localhost  # optional; defaults to localhost
     ```
-5. **Initialize the database**
+5. **Initialize the database (Can use a Docker instance as well)**
     ```bash
     alembic upgrade head
     ```
